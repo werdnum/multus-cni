@@ -305,14 +305,26 @@ func (o *Options) createMultusConfig() (string, error) {
 		return "", fmt.Errorf("cannot find master CNI config in %q: %v", o.MultusAutoconfigDir, err)
 	}
 
-	masterConfigPath := files[0]
-	masterConfigBytes, err := os.ReadFile(masterConfigPath)
-	if err != nil {
-		return "", fmt.Errorf("cannot read master CNI config file %q: %v", masterConfigPath, err)
-	}
-	masterConfig := map[string]interface{}{}
-	if err = json.Unmarshal(masterConfigBytes, &masterConfig); err != nil {
-		return "", fmt.Errorf("cannot read master CNI config json: %v", err)
+	var masterConfig map[string]interface{}
+	var masterConfigPath string
+	for _, f := range files {
+		masterConfigPath = f
+		fmt.Printf("Reading delegate config %s\n", masterConfigPath)
+		masterConfigBytes, err := os.ReadFile(masterConfigPath)
+		if err != nil {
+			return "", fmt.Errorf("cannot read master CNI config file %q: %v", masterConfigPath, err)
+		}
+		masterConfig = map[string]interface{}{}
+		if err = json.Unmarshal(masterConfigBytes, &masterConfig); err != nil {
+			return "", fmt.Errorf("cannot read master CNI config json: %v", err)
+		}
+		plugins := masterConfig["plugins"].([]interface{})
+		if len(plugins) > 0 && plugins[0].(map[string]interface{})["type"] == "multus" {
+			fmt.Printf("Delegate is another Multus, we don't want that. Trying the next one.\n")
+		} else {
+			fmt.Printf("Delegate is %s of type %s\n", masterConfig["name"], plugins[0].(map[string]interface{})["type"])
+			break
+		}
 	}
 
 	// check CNIVersion
